@@ -1,61 +1,36 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
+
+	"github.com/hawksterdhruv/todo_list_go/commons"
+	"github.com/hawksterdhruv/todo_list_go/todo"
 )
 
-// todo : move all the todo items to todo module
-type TodoItem struct {
-	Title       string `json:"title"`
-	Description string `json:"description`
-	Status bool `json:"done"`//expand to include multiple statuses, Not Started, Started, Done, Stalled 
-}
-type Todo struct {
-	Title string `json:"title"`
-	Items []TodoItem `json:"items`
-}
-
-func (todo Todo) display() {
+// TODO: CHANGE SIGNATURE !!
+func display(todo todo.TodoList) {
 	// Displays todo list
 	fmt.Println(strings.Repeat("=", len(todo.Title)))
 	fmt.Println(todo.Title)
 	fmt.Println(strings.Repeat("=", len(todo.Title)))
 	for i, item := range todo.Items  {
-		fmt.Printf("%d : %s\n", i+1, item.toString())
+		fmt.Printf("%d : %s\n", i+1, toString(item))
 	}
 }
 
-func (todoItem TodoItem) toString() string {
+// TODO: CHANGE SIGNATURE !!
+func  toString(todoItem todo.TodoItem) string {
 	return fmt.Sprintf("%s : %s", todoItem.Title, todoItem.Description)
 }
 
-
-func (todo *Todo) addItem(title, description string){
-	todoItem := TodoItem{Title: title, Description: description, Status: false}
-	todo.Items = append(todo.Items, todoItem)
-}
-
-func (todo *Todo) addItemWithStatus(title, description string, done bool){
-	todoItem := TodoItem{Title: title, Description: description, Status: done}
-	todo.Items = append(todo.Items, todoItem)
-}
-
-func input(prompt string) (string) {
-	// Utility function for CLI but can be kept in commons
-	fmt.Printf("%s : ", prompt)
-	in := bufio.NewReader(os.Stdin)
-	result, _, _ := in.ReadLine()
-	return string(result)
-}
-
 type TodoView interface {
-	addItem(todo *Todo) // Should the method signature be different??
-	display(todo []Todo)
+	// addItem(todo *todo.TodoList) // Should the method signature be different??
+	display(todo []todo.TodoList)
 }
 
 type TodoStorage interface {
@@ -65,20 +40,30 @@ type TodoStorage interface {
 	close()
 }
 
-func (cli CLI) addItem(todo *Todo){
-	itemTitle := input("Enter New Task")
-	itemDescription := input("Enter Task Description")
-	todo.addItem(string(itemTitle), string(itemDescription))
+func addTodoList() todo.TodoList {
+// Pass app vs app interface method??
+// Modifies app/app.storage object ??
+	listTitle := commons.Input("Enter name for new Todo List: ")
+	return todo.TodoList{Title: listTitle}
+
 }
 
-func (cli CLI) display(todoLists []Todo) {
+// What level of abstaction should this be? 
+func addItem(todo *todo.TodoList){
+	itemTitle := commons.Input("Enter New Task: ")
+	itemDescription := commons.Input("Enter Task Description: ")
+	todo.AddItem(string(itemTitle), string(itemDescription))
+}
+
+func (cli CLI) display(todoLists []todo.TodoList) {
 	// Displays todo lists titles
-	fmt.Printf("TODO LISTS")
+	commons.ClearScreen()
+	fmt.Printf("TODO LISTS\n==========\n")
 	for i, todo := range todoLists { 
 		fmt.Println(i+1, todo.Title)
 	}
-	options := "Select Option : []View List, [+]New List, [x]Exit"
-	fmt.Printf("%s : ", options)
+	options := "[]View List, [+]New List, [x]Exit"
+	fmt.Printf("%s: ", options)
 }
 
 type CLI struct {
@@ -88,30 +73,84 @@ type CLI struct {
 
 type App struct {
 	view TodoView
-	data []Todo
+	data []todo.TodoList // live session data
+	filename string
 }
 
-func initTodoApp() (App)  {
+func (app App) run(){
+	for {
+		app.view.display(app.data)
+		
+		option := commons.Input("Select Option: ")
+		listIndex, err := strconv.Atoi(option)
+		if err == nil  {
+			if listIndex>0 && listIndex <= len(app.data) {
+				currentTodoList := &app.data[listIndex - 1]
+
+				display(*currentTodoList)
+				options := "[+]AddItem, [x]Back, [d]Delete list"
+				fmt.Printf("%s : ", options)
+				todoOptions := commons.Input("Select Option: ")
+				switch todoOptions{
+				case "+":
+					addItem(currentTodoList)
+					// WRONG !! This will take us back to the main menu.
+				case "x","X":
+					continue
+				default:
+					commons.Input("You have selected an unknown option, Please choose again.")
+					continue
+				}
+				
+			} else {
+				commons.Input("You have selected an unknown option, Please choose again.")
+				continue
+			}
+
+		} else {
+			switch option {
+			case "+" :
+				// Call method to add todo list
+			case "x", "X":
+				// Call method for exiting program
+				// Alternative runtime.Goexit()
+				// defer os.Exit(0)
+				fp := openCreateFile(app.filename)
+				defer closeFile(fp)
+
+				todoJson, err := json.Marshal(app.data)
+				logAndFatal(err)
+				_, err = fp.WriteString(string(todoJson))
+				logAndFatal(err)
+				
+				return 
+			default:
+				commons.Input("You have selected an unknown option, Please choose again.")
+				continue
+			}
+		}
+	}
+}
+
+func initTodoApp(filename string) (App)  {
 	log.Printf("Initializing App")
 	// Select which View to intiate
 	var view CLI
-
+	var todoLists []todo.TodoList
 	// Select database to intiate
 	// todo : currently harcoding file name
-	jsonInput, err := os.ReadFile("todo.json")
+	jsonInput, err := os.ReadFile(filename)
 	logAndFatal(err)
-	// fmt.Printf("input bytes %d \n %s\n", len(jsonInput), jsonInput)
-	var todoLists []Todo
 	err = json.Unmarshal(jsonInput, &todoLists)
 	logAndFatal(err)
-	view.display(todoLists)
 
-	return App{view, todoLists}
+	return App{view, todoLists, filename}
 }
 
 
 func main() {
-	initTodoApp()
+	app := initTodoApp("todo.json")
+	app.run()
 
 	// var todo Todo
 	// See all todo lists

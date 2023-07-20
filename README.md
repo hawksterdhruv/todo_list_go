@@ -6,6 +6,13 @@
 
 ## Learnings
 - Implemented a TodoView interface
+- Capitalizing allows export
+    - Capitalizing `struct` and `function` names allows them to be exported from the module
+- Mechanism for using local modules
+    ```zsh
+    go mod edit -replace github.com/hawksterdhruv/todo_list_golang/commons=./commons
+    go mod tidy
+    ```
 
 ### Questions / Design decision confusions
 - Does opening the file fall under the purview of `Initapp()`

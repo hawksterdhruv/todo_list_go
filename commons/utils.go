@@ -3,6 +3,7 @@ package commons
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -41,4 +42,11 @@ func Input(prompt string) (string) {
 	in := bufio.NewReader(os.Stdin)
 	result, _, _ := in.ReadLine()
 	return string(result)
+}
+
+// -------------------- ERROR FUNCTIONS -----------------------
+func LogAndFatal(err error) {
+	if err != nil {
+		log.Fatalf("%T, %s", err, err)
+	}
 }
